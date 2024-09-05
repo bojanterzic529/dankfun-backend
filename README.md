@@ -1,2 +1,1 @@
-# dankfun-backend
-Backend for dank fun
+# ChadFun-Chat-api
