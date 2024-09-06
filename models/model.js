@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const dataSchema = new mongoose.Schema({
-    ShitlordAddress: {
+    DankAddress: {
         required: true,
         type: String
     },
