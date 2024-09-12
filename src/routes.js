@@ -128,7 +128,7 @@ router.post('/profileUploads', profileUpload.single('file'), (req, res) => {
 });
 
 router.get('/version', (req, res) => {
-    res.send('1.1');
+    res.send('1.2');
     return;
 });
 

@@ -119,7 +119,7 @@ ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill('�
 🪙 ${tokenBalance - tokenAmount < 0.1 ? '**New Holder**' : "Position +" + risePercent.toLocaleString() + "%"}
 💸 Market Cap: $${marketCap.toLocaleString('en-US')}`;
 
-                bot.sendPhoto(chatId, BANNER_IMAGE_URL, { caption: message, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: 'Buy', url: `https://pump.dankboy.com/buy/?chain=1&address=${dankPumpAddress}` }]] } });
+                bot.sendPhoto(chatId, BANNER_IMAGE_URL, { caption: message, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: 'Buy', url: `https://pump.dankboy.com/buy/?chain=${isTest ? 11155111 : 1}&address=${dankPumpAddress}` }]] } });
             })
             .on('error', console.error);
     }
