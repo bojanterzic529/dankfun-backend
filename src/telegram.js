@@ -34,6 +34,21 @@ const init_TelegramBot = (isTest = false) => {
                         group.emoji = emoji;
                         await group.save();
                         bot.sendMessage(chatId, "Emoji updated.");
+                        bot.sendMessage(chatId, "Input Banner Image Url").then((sentMsg) => {
+                            bot.onReplyToMessage(sentMsg.chat.id, sentMsg.message_id, async (replyMsg) => {
+                                const imageUrl = replyMsg.text.trim();
+                                let group = await TelegramGroup.findOne({ chatId, isTest });
+                                if (!group) {
+                                    bot.sendMessage(chatId, "Can't update Image before register");
+                                } else {
+                                    group.banner = imageUrl;
+                                    await group.save();
+                                    bot.sendMessage(chatId, "Image updated.");
+                                    refreshMonitoring();
+                                }
+                            });
+                        });
+                        refreshMonitoring();
                     }
                 });
             });
@@ -72,7 +87,7 @@ const init_TelegramBot = (isTest = false) => {
                     // Store the information
                     let group = await TelegramGroup.findOne({ chatId, isTest });
                     if (!group) {
-                        await TelegramGroup.create({ chatId, dankPumpAddress, tokenName, isTest, emoji: '🚀' });
+                        await TelegramGroup.create({ chatId, dankPumpAddress, tokenName, isTest, emoji: '🚀', banner: BANNER_IMAGE_URL });
                         bot.sendMessage(chatId, "Successfully registered. Notifications will now be monitored for this token.");
                     } else {
                         group.dankPumpAddress = dankPumpAddress;
@@ -100,13 +115,13 @@ const init_TelegramBot = (isTest = false) => {
 
         // Set up new event listeners for each group's token contract address
         groups.forEach(group => {
-            const { dankPumpAddress, chatId, emoji } = group;
-            monitorTokenBuys(dankPumpAddress, chatId, emoji);
+            const { dankPumpAddress, chatId, emoji, banner } = group;
+            monitorTokenBuys(dankPumpAddress, chatId, emoji, banner);
         });
     }
 
     // Monitor transactions for a specific token contract
-    function monitorTokenBuys(dankPumpAddress, chatId, emoji) {
+    function monitorTokenBuys(dankPumpAddress, chatId, emoji, banner) {
         if (listeners[dankPumpAddress]) {
             // If already monitoring this contract, don't set up a new listener
             return;
@@ -144,7 +159,7 @@ ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(em
 🪙 ${tokenBalance - tokenAmount < 0.1 ? '**New Holder**' : "Position +" + risePercent.toLocaleString() + "%"}
 💸 Market Cap: $${marketCap.toLocaleString('en-US')}`;
 
-                bot.sendPhoto(chatId, BANNER_IMAGE_URL, { caption: message, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: 'Buy', url: `https://pump.dankboy.com/buy/?chain=${isTest ? 11155111 : 1}&address=${dankPumpAddress}` }]] } });
+                bot.sendPhoto(chatId, banner, { caption: message, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: 'Buy', url: `https://pump.dankboy.com/buy/?chain=${isTest ? 11155111 : 1}&address=${dankPumpAddress}` }]] } });
             })
             .on('error', console.error);
     }

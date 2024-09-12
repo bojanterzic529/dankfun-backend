@@ -100,6 +100,10 @@ const groupSchema = new mongoose.Schema({
     emoji: {
         required: true,
         type: String
+    },
+    banner: {
+        required: true,
+        type: String
     }
 });
 const TelegramGroup = mongoose.model('Group', groupSchema);
