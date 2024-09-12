@@ -127,5 +127,9 @@ router.post('/profileUploads', profileUpload.single('file'), (req, res) => {
     }
 });
 
+router.get('/version', (req, res) => {
+    res.send('1.1');
+    return;
+});
 
 module.exports = router;
