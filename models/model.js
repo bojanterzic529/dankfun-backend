@@ -96,6 +96,10 @@ const groupSchema = new mongoose.Schema({
     isTest: {
         required: true,
         type: Boolean
+    },
+    emoji: {
+        required: true,
+        type: String
     }
 });
 const TelegramGroup = mongoose.model('Group', groupSchema);

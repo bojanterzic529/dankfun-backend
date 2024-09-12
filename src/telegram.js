@@ -15,6 +15,31 @@ const init_TelegramBot = (isTest = false) => {
     // Store listeners to remove them when configs change
     const listeners = {};
 
+    bot.onText(/\/settings/, async (msg) => {
+        const chatId = msg.chat.id;
+        // Check if the sender is the owner or an admin
+        bot.getChatAdministrators(chatId).then(admins => {
+            const isAdmin = admins.some(admin => admin.user.id === msg.from.id);
+            if (!isAdmin) {
+                bot.sendMessage(chatId, "Only admins or the group owner can set this up.");
+                return;
+            }
+            bot.sendMessage(chatId, "Input Emoji").then((sentMsg) => {
+                bot.onReplyToMessage(sentMsg.chat.id, sentMsg.message_id, async (replyMsg) => {
+                    const emoji = replyMsg.text.trim();
+                    let group = await TelegramGroup.findOne({ chatId, isTest });
+                    if (!group) {
+                        bot.sendMessage(chatId, "Can't update Emoji before register");
+                    } else {
+                        group.emoji = emoji;
+                        await group.save();
+                        bot.sendMessage(chatId, "Emoji updated.");
+                    }
+                });
+            });
+        });
+    })
+
     // Handle /subscribe <token_address> command
     bot.onText(/\/subscribe@DankFunBot/, async (msg, match) => {
         const chatId = msg.chat.id;
@@ -47,7 +72,7 @@ const init_TelegramBot = (isTest = false) => {
                     // Store the information
                     let group = await TelegramGroup.findOne({ chatId, isTest });
                     if (!group) {
-                        await TelegramGroup.create({ chatId, dankPumpAddress, tokenName, isTest });
+                        await TelegramGroup.create({ chatId, dankPumpAddress, tokenName, isTest, emoji: '🚀' });
                         bot.sendMessage(chatId, "Successfully registered. Notifications will now be monitored for this token.");
                     } else {
                         group.dankPumpAddress = dankPumpAddress;
@@ -65,7 +90,7 @@ const init_TelegramBot = (isTest = false) => {
     // Function to refresh all monitoring processes
     async function refreshMonitoring() {
         // Retrieve all groups and their token contract addresses
-        const groups = await TelegramGroup.find({isTest});
+        const groups = await TelegramGroup.find({ isTest });
 
         // Clear all existing event subscriptions
         for (const token of Object.keys(listeners)) {
@@ -75,13 +100,13 @@ const init_TelegramBot = (isTest = false) => {
 
         // Set up new event listeners for each group's token contract address
         groups.forEach(group => {
-            const { dankPumpAddress, chatId, tokenName } = group;
-            monitorTokenBuys(dankPumpAddress, chatId);
+            const { dankPumpAddress, chatId, emoji } = group;
+            monitorTokenBuys(dankPumpAddress, chatId, emoji);
         });
     }
 
     // Monitor transactions for a specific token contract
-    function monitorTokenBuys(dankPumpAddress, chatId) {
+    function monitorTokenBuys(dankPumpAddress, chatId, emoji) {
         if (listeners[dankPumpAddress]) {
             // If already monitoring this contract, don't set up a new listener
             return;
@@ -112,7 +137,7 @@ const init_TelegramBot = (isTest = false) => {
 
                 console.log(transactionHash, from, ethAmount, tokenAmount, virtualEthLp, marketCap)
                 const message = `${tokenName} __Buy!__
-${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill('🚀')}
+${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(emoji)}
 💵 ${ethAmount.toLocaleString('en-US')} ETH ($${Number(ethAmount * ethPrice).toLocaleString('en-US')})
 🔀 ${tokenAmount.toLocaleString('en-US')} **${tokenName}**
 👤 [${shortenAddress(from)}](https://${isTest ? 'sepolia.' : ''}etherscan.io/address/${from}) | [Txn](https://${isTest ? 'sepolia.' : ''}etherscan.io/tx/${transactionHash})
