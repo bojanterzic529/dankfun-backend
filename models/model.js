@@ -78,4 +78,25 @@ const historySchema = new mongoose.Schema({
     },
 })
 const historyData = mongoose.model('history', historySchema)
-module.exports = { Data, profileData, historyData}
+
+const groupSchema = new mongoose.Schema({
+    chatId: {
+        required: true,
+        type: String,
+        unique: true
+    },
+    dankPumpAddress: {
+        required: true,
+        type: String
+    },
+    tokenName: {
+        required: true,
+        type: String
+    },
+    isTest: {
+        required: true,
+        type: Boolean
+    }
+});
+const TelegramGroup = mongoose.model('Group', groupSchema);
+module.exports = { Data, profileData, historyData, TelegramGroup }
