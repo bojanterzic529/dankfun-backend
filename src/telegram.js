@@ -44,11 +44,11 @@ const init_TelegramBot = (isTest = false) => {
                                     group.banner = imageUrl;
                                     await group.save();
                                     bot.sendMessage(chatId, "Image updated.");
-                                    refreshMonitoring();
+                                    refreshCertainMonitor(group.dankPumpAddress, group.chatId, group.emoji, group.banner);
                                 }
                             });
                         });
-                        refreshMonitoring();
+                        refreshCertainMonitor(group.dankPumpAddress, group.chatId, group.emoji, group.banner);
                     }
                 });
             });
@@ -108,9 +108,10 @@ const init_TelegramBot = (isTest = false) => {
         const groups = await TelegramGroup.find({ isTest });
 
         // Clear all existing event subscriptions
-        for (const token of Object.keys(listeners)) {
-            listeners[token].unsubscribe();
-            delete listeners[token];
+        for (const dank of Object.keys(listeners)) {
+            listeners[dank].unsubscribe();
+            listeners[dank].removeListener('data');
+            delete listeners[dank];
         }
 
         // Set up new event listeners for each group's token contract address
@@ -118,6 +119,13 @@ const init_TelegramBot = (isTest = false) => {
             const { dankPumpAddress, chatId, emoji, banner } = group;
             monitorTokenBuys(dankPumpAddress, chatId, emoji, banner);
         });
+    }
+
+    function refreshCertainMonitor(dankPumpAddress, chatId, emoji, banner) {
+        listeners[dankPumpAddress].unsubscribe();
+        listeners[dankPumpAddress].removeListener('data');
+        delete listeners[dankPumpAddress];
+        monitorTokenBuys(dankPumpAddress, chatId, emoji, banner);
     }
 
     // Monitor transactions for a specific token contract
