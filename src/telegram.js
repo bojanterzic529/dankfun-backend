@@ -24,19 +24,43 @@ const init_TelegramBot = (isTest = false) => {
                 bot.sendMessage(chatId, "Only admins or the group owner can set this up.");
                 return;
             }
-            bot.sendMessage(chatId, "Input Emoji").then((sentMsg) => {
-                bot.onReplyToMessage(sentMsg.chat.id, sentMsg.message_id, async (replyMsg) => {
-                    const emoji = replyMsg.text.trim();
-                    let group = await TelegramGroup.findOne({ chatId, isTest });
-                    if (!group) {
-                        bot.sendMessage(chatId, "Can't update Emoji before register");
-                    } else {
+            bot.sendMessage(chatId, "Set your Emoji and Banner Image", { reply_markup: { inline_keyboard: [[{ text: 'Set Emoji', callback_data: 'emoji' }, { text: 'Set Banner', callback_data: 'banner' }]] } })
+        });
+    })
+
+    bot.on('callback_query', async (callbackQuery) => {
+        const chatId = callbackQuery.message.chat.id;
+        const data = callbackQuery.data; // This is your callback_data
+        let group = await TelegramGroup.findOne({ chatId, isTest });
+        if (!group) {
+            bot.sendMessage(chatId, "Can't update Settings before subscribe");
+            return;
+        }
+        switch (data) {
+            case 'emoji':
+                bot.sendMessage(chatId, "Input Emoji").then((sentMsg) => {
+                    bot.onReplyToMessage(sentMsg.chat.id, sentMsg.message_id, async (replyMsg) => {
+                        const emoji = replyMsg.text?.trim();
+                        if (!emoji) {
+                            bot.sendMessage(chatId, "Invalid Emoji");
+                        }
                         group.emoji = emoji;
                         await group.save();
+                        refreshCertainMonitor(group.dankPumpAddress, group.chatId, group.emoji, group.banner);
                         bot.sendMessage(chatId, "Emoji updated.");
-                        bot.sendMessage(chatId, "Input Banner Image Url").then((sentMsg) => {
-                            bot.onReplyToMessage(sentMsg.chat.id, sentMsg.message_id, async (replyMsg) => {
-                                const imageUrl = replyMsg.text.trim();
+                    });
+                });
+                break;
+            case 'banner':
+                bot.sendMessage(chatId, "Input Banner Image Url").then((sentMsg) => {
+                    bot.onReplyToMessage(sentMsg.chat.id, sentMsg.message_id, async (replyMsg) => {
+                        const imageUrl = replyMsg.text?.trim();
+                        if (!imageUrl) {
+                            bot.sendMessage(chatId, "Invalid Banner Image Url");
+                        }
+                        try {
+                            const response = await fetch(imageUrl, { method: 'GET' });
+                            if (response.ok && response.headers.get('Content-Type').includes('image')) {
                                 let group = await TelegramGroup.findOne({ chatId, isTest });
                                 if (!group) {
                                     bot.sendMessage(chatId, "Can't update Image before register");
@@ -46,14 +70,19 @@ const init_TelegramBot = (isTest = false) => {
                                     bot.sendMessage(chatId, "Image updated.");
                                     refreshCertainMonitor(group.dankPumpAddress, group.chatId, group.emoji, group.banner);
                                 }
-                            });
-                        });
-                        refreshCertainMonitor(group.dankPumpAddress, group.chatId, group.emoji, group.banner);
-                    }
+                                return;
+                            }
+                        } catch (error) { }
+                        bot.sendMessage(chatId, "Given Url doesn't exist");
+                    });
                 });
-            });
-        });
-    })
+                break;
+            default:
+                break;
+        }
+        // Acknowledge the callback query
+        bot.answerCallbackQuery(callbackQuery.id);
+    });
 
     // Handle /subscribe <token_address> command
     bot.onText(/\/subscribe@DankFunBot/, async (msg, match) => {
@@ -75,7 +104,7 @@ const init_TelegramBot = (isTest = false) => {
             bot.sendMessage(chatId, "Type CA:").then((sentMsg) => {
                 // Listen for the next message (reply) providing the contract address
                 bot.onReplyToMessage(sentMsg.chat.id, sentMsg.message_id, async (replyMsg) => {
-                    const dankPumpAddress = replyMsg.text.trim();
+                    const dankPumpAddress = replyMsg.text?.trim();
                     // Ensure it's a valid Ethereum address
                     if (!web3.utils.isAddress(dankPumpAddress)) {
                         bot.sendMessage(chatId, "Invalid contract address. Please ensure you're using a correct Ethereum address format.");
@@ -96,7 +125,8 @@ const init_TelegramBot = (isTest = false) => {
                         bot.sendMessage(chatId, "Token contract address updated.");
                     }
                     refreshMonitoring(); // Refresh monitoring when a group is added or updated
-                });
+                })
+                    .catch(error => bot.sendMessage(chatId, "Unkown Error!"));
             });
         }).catch(error => console.error("Failed to retrieve chat admins: ", error));
 
@@ -122,6 +152,7 @@ const init_TelegramBot = (isTest = false) => {
     }
 
     function refreshCertainMonitor(dankPumpAddress, chatId, emoji, banner) {
+        console.log(listeners[dankPumpAddress]);
         listeners[dankPumpAddress].unsubscribe();
         listeners[dankPumpAddress].removeListener('data');
         delete listeners[dankPumpAddress];
