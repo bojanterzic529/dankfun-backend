@@ -28,5 +28,5 @@ app.listen(port, () => {
     console.log(`Server Started at ${port}`)
 })
 
-init_TelegramBot();
-init_TelegramBot(true);
+// init_TelegramBot();
+// init_TelegramBot(true);
