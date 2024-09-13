@@ -48,9 +48,9 @@ router.get("/refreshMonitoring", async (req, res) => {
         if (Date.now() > lastRefreshTime.value + 100000) {
             triggerRefreshMonitoring();
             triggerRefreshMonitoringTestnet();
+            lastRefreshTime.value = Date.now();
+            await lastRefreshTime.save();
         }
-        lastRefreshTime.value = Date.now();
-        await lastRefreshTime.save();
     }
     res.send('ok');
 })
