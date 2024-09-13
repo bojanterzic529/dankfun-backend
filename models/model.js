@@ -118,4 +118,15 @@ const advertisedSchema = new mongoose.Schema({
     }
 })
 const Advertised = mongoose.model('advertise', advertisedSchema);
-module.exports = { Data, profileData, historyData, TelegramGroup, Advertised }
+
+const statusSchema = new mongoose.Schema({
+    key: {
+        required: true,
+        type: String
+    },
+    value: {
+        type: Number
+    }
+})
+const StatusData = mongoose.model('status', statusSchema);
+module.exports = { Data, profileData, historyData, TelegramGroup, Advertised, StatusData }

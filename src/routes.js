@@ -1,8 +1,9 @@
 const express = require("express");
 const path = require("path");
 const multer = require('multer');
-const { Data, profileData, historyData, Advertised } = require("../models/model");
+const { Data, profileData, historyData, Advertised, StatusData } = require("../models/model");
 const { controller } = require("./controller");
+const { refreshMonitoring } = require("./telegram");
 const router = express.Router();
 
 router.use((req, res, next) => {
@@ -37,16 +38,30 @@ router.get("/getOne/:DankAddress", async (req, res) => {
 
 router.get("/getAdvertised", async (req, res) => {
     try {
-        const left = await Advertised.find({type: 'left'});
-        if(left.length == 0) await Advertised.create({type: "left", address: ''})
-        const center = await Advertised.find({type: 'center'});
-        if(center.length == 0) await Advertised.create({type: "center", address: ''})
-        const right = await Advertised.find({type: 'right'});
-        if(right.length == 0) await Advertised.create({type: "right", address: ''})
+        const left = await Advertised.find({ type: 'left' });
+        if (left.length == 0) await Advertised.create({ type: "left", address: '' })
+        const center = await Advertised.find({ type: 'center' });
+        if (center.length == 0) await Advertised.create({ type: "center", address: '' })
+        const right = await Advertised.find({ type: 'right' });
+        if (right.length == 0) await Advertised.create({ type: "right", address: '' })
         res.json([left[0]?.address, center[0]?.address, right[0]?.address]);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
+})
+
+router.get("/private/refreshMonitoring", async (req, res) => {
+    let lastRefreshTime = await StatusData.findOne({ key: 'lastRefreshTime' });
+    if (lastRefreshTime?.value == undefined) {
+        await StatusData.create({ key: 'lastRefreshTime', value: Date.now() });
+        refreshMonitoring();
+    }
+    else {
+        if (Date.now() > lastRefreshTime.value + 100000) refreshMonitoring();
+        lastRefreshTime.value = Date.now();
+        await lastRefreshTime.save();
+    }
+    res.send('ok');
 })
 
 router.get("/getProfile/:profileAddress", async (req, res) => {
