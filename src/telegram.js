@@ -122,7 +122,7 @@ const init_TelegramBot = (isTest = false) => {
                         group.dankPumpAddress = dankPumpAddress;
                         group.tokenName = tokenName;
                         await group.save();
-                        bot.sendMessage(chatId, "Token contract address updated.");
+                        bot.sendMessage(chatId, "DankPump contract address updated.");
                     }
                     refreshMonitoring(); // Refresh monitoring when a group is added or updated
                 })

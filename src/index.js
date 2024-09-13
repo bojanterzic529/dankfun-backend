@@ -4,6 +4,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const routes = require('./routes');
 const init_TelegramBot = require('./telegram');
+const { Advertised } = require('../models/model');
 const mongoString = process.env.DATABASE_URL;
 
 mongoose.connect(mongoString);

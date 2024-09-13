@@ -1,7 +1,7 @@
 const express = require("express");
 const path = require("path");
 const multer = require('multer');
-const {Data, profileData, historyData} = require("../models/model");
+const { Data, profileData, historyData, Advertised } = require("../models/model");
 const { controller } = require("./controller");
 const router = express.Router();
 
@@ -23,19 +23,33 @@ router.post("/addprofile", controller.addProfile);
 // add purcahse history
 router.post("/addHistory", controller.addHistory);
 
-//Get by chad address
-router.get("/getOne/:DankAddress", async(req, res) => {
+//Get by dank address
+router.get("/getOne/:DankAddress", async (req, res) => {
     try {
         const data = await Data.find({
             DankAddress: req.params.DankAddress,
-        }).sort({timestamp: -1});
+        }).sort({ timestamp: -1 });
         res.json(data);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-router.get("/getProfile/:profileAddress", async(req, res) => {
+router.get("/getAdvertised", async (req, res) => {
+    try {
+        const left = await Advertised.find({type: 'left'});
+        if(left.length == 0) await Advertised.create({type: "left", address: ''})
+        const center = await Advertised.find({type: 'center'});
+        if(center.length == 0) await Advertised.create({type: "center", address: ''})
+        const right = await Advertised.find({type: 'right'});
+        if(right.length == 0) await Advertised.create({type: "right", address: ''})
+        res.json([left[0]?.address, center[0]?.address, right[0]?.address]);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+})
+
+router.get("/getProfile/:profileAddress", async (req, res) => {
     try {
         const data = await profileData.find({
             profileAddress: req.params.profileAddress,
@@ -46,18 +60,18 @@ router.get("/getProfile/:profileAddress", async(req, res) => {
     }
 });
 
-router.get("/getHistory", async(req, res) => {
+router.get("/getHistory", async (req, res) => {
     try {
-        const data = await historyData.find().sort({timestamp: -1}).limit(5);
+        const data = await historyData.find().sort({ timestamp: -1 }).limit(5);
         res.json(data);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 });
 
-router.get("/getUserHistory/:profileAddress", async(req, res) => {
+router.get("/getUserHistory/:profileAddress", async (req, res) => {
     try {
-        const data = await historyData.find({buyer: req.params.profileAddress});
+        const data = await historyData.find({ buyer: req.params.profileAddress });
         res.json(data);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -74,7 +88,7 @@ const logoStorage = multer.diskStorage({
         cb(null, "src/uploads/")
     },
     filename: (req, file, cb) => {
-        cb(null, file.originalname +  "-" +'logo' + ".png")
+        cb(null, file.originalname + "-" + 'logo' + ".png")
     },
 })
 const logoUpload = multer({ storage: logoStorage });
@@ -93,7 +107,7 @@ const bannerStorage = multer.diskStorage({
         cb(null, "src/uploads/")
     },
     filename: (req, file, cb) => {
-        cb(null, file.originalname +  "-" +'banner' + ".png")
+        cb(null, file.originalname + "-" + 'banner' + ".png")
     },
 })
 const bannerUpload = multer({ storage: bannerStorage });

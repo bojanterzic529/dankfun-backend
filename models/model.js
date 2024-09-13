@@ -107,4 +107,15 @@ const groupSchema = new mongoose.Schema({
     }
 });
 const TelegramGroup = mongoose.model('Group', groupSchema);
-module.exports = { Data, profileData, historyData, TelegramGroup }
+
+const advertisedSchema = new mongoose.Schema({
+    type: {
+        require: true,
+        type: String
+    },
+    address: {
+        type: String
+    }
+})
+const Advertised = mongoose.model('advertise', advertisedSchema);
+module.exports = { Data, profileData, historyData, TelegramGroup, Advertised }
