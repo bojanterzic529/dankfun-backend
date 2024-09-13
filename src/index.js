@@ -28,7 +28,8 @@ app.listen(port, () => {
     console.log(`Server Started at ${port}`)
 })
 
-if(process.env.ENABLE_BOT == true) {
+if(process.env.ENABLE_BOT == "true") {
+    console.log('initializing bot....')
     init_TelegramBot();
     init_TelegramBot(true);
 }

@@ -16,7 +16,6 @@ const init_TelegramBot = (isTest = false) => {
     const listeners = {};
 
     bot.onText(/\/settings/, async (msg) => {
-        console.log('debug calling here...')
         const chatId = msg.chat.id;
         // Check if the sender is the owner or an admin
         bot.getChatAdministrators(chatId).then(admins => {
@@ -153,9 +152,7 @@ const init_TelegramBot = (isTest = false) => {
     }
 
     function refreshCertainMonitor(dankPumpAddress, chatId, emoji, banner) {
-        console.log(listeners[dankPumpAddress]);
         listeners[dankPumpAddress].unsubscribe();
-        listeners[dankPumpAddress].removeListener('data');
         delete listeners[dankPumpAddress];
         monitorTokenBuys(dankPumpAddress, chatId, emoji, banner);
     }
@@ -168,30 +165,29 @@ const init_TelegramBot = (isTest = false) => {
         }
         const web3Subscription = new Web3(isTest ? 'wss://ethereum-sepolia-rpc.publicnode.com' : 'wss://ethereum-rpc.publicnode.com');
         const contract = new web3Subscription.eth.Contract(contractAbi, dankPumpAddress);
+        listeners[dankPumpAddress] = contract.events.Buy({ fromBlock: 'latest' });
+        listeners[dankPumpAddress].on('data', async (event) => {
+            const transactionHash = event.transactionHash;
+            const from = event.returnValues[0];
+            const dankPumpAddress = event.address;
+            const contract = new web3.eth.Contract(contractAbi, dankPumpAddress);
+            const [tokenName, tokenAddress, ethPriceResponse] = await Promise.all([
+                contract.methods.symbol().call(),
+                contract.methods.token().call(),
+                fetch('https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD', { method: 'GET' })
+            ])
+            const ethPriceData = await ethPriceResponse.json()
+            const ethPrice = ethPriceData.USD
+            const ethAmount = Number(web3.utils.fromWei(event.returnValues[1], 'ether'));
+            const tokenAmount = Number(web3.utils.fromWei(event.returnValues[2], 'ether'));
+            const virtualEthLp = event.returnValues[3];
+            const marketCap = Number(web3.utils.fromWei(event.returnValues[4], 'ether') * ethPrice);
+            const tokenContract = new web3.eth.Contract(tokenABI, tokenAddress);
+            const tokenBalance = Number(web3.utils.fromWei(await tokenContract.methods.balanceOf(from).call(), 'ether'));
+            const risePercent = (tokenAmount) / (tokenBalance - tokenAmount) * 100;
 
-        listeners[dankPumpAddress] = contract.events.Buy({ fromBlock: 'latest' })
-            .on('data', async (event) => {
-                const transactionHash = event.transactionHash;
-                const from = event.returnValues[0];
-                const dankPumpAddress = event.address;
-                const contract = new web3.eth.Contract(contractAbi, dankPumpAddress);
-                const [tokenName, tokenAddress, ethPriceResponse] = await Promise.all([
-                    contract.methods.symbol().call(),
-                    contract.methods.token().call(),
-                    fetch('https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD', { method: 'GET' })
-                ])
-                const ethPriceData = await ethPriceResponse.json()
-                const ethPrice = ethPriceData.USD
-                const ethAmount = Number(web3.utils.fromWei(event.returnValues[1], 'ether'));
-                const tokenAmount = Number(web3.utils.fromWei(event.returnValues[2], 'ether'));
-                const virtualEthLp = event.returnValues[3];
-                const marketCap = Number(web3.utils.fromWei(event.returnValues[4], 'ether') * ethPrice);
-                const tokenContract = new web3.eth.Contract(tokenABI, tokenAddress);
-                const tokenBalance = Number(web3.utils.fromWei(await tokenContract.methods.balanceOf(from).call(), 'ether'));
-                const risePercent = (tokenAmount) / (tokenBalance - tokenAmount) * 100;
-
-                console.log(transactionHash, from, ethAmount, tokenAmount, virtualEthLp, marketCap)
-                const message = `${tokenName} __Buy!__
+            console.log(transactionHash, from, ethAmount, tokenAmount, virtualEthLp, marketCap)
+            const message = `${tokenName} __Buy!__
 ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(emoji)}
 💵 ${ethAmount.toLocaleString('en-US')} ETH ($${Number(ethAmount * ethPrice).toLocaleString('en-US')})
 🔀 ${tokenAmount.toLocaleString('en-US')} **${tokenName}**
@@ -199,8 +195,8 @@ ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(em
 🪙 ${tokenBalance - tokenAmount < 0.1 ? '**New Holder**' : "Position +" + risePercent.toLocaleString() + "%"}
 💸 Market Cap: $${marketCap.toLocaleString('en-US')}`;
 
-                bot.sendPhoto(chatId, banner, { caption: message, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: 'Buy', url: `https://pump.dankboy.com/buy/?chain=${isTest ? 11155111 : 1}&address=${dankPumpAddress}` }]] } });
-            })
+            bot.sendPhoto(chatId, banner, { caption: message, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: 'Buy', url: `https://pump.dankboy.com/buy/?chain=${isTest ? 11155111 : 1}&address=${dankPumpAddress}` }]] } });
+        })
             .on('error', console.error);
     }
 
