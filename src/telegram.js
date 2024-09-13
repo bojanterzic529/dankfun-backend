@@ -7,14 +7,13 @@ const tokenABI = require('../abis/coin.json')
 const TELEGRAM_BOT_TOKEN = '6225762529:AAGLcw4RuMfFV6S8xN7hGxlZh6U8t6vC_Tw';
 const TELEGRAM_BOT_TOKEN_TEST = "6845541149:AAE71UFuRkLEhH-PLoykr21fGAXHZ6j7hbY";
 const BANNER_IMAGE_URL = 'https://dankboy.com/hero_bg.jpg';
-const listeners = {};
 
 const init_TelegramBot = (isTest = false) => {
 
     const web3 = new Web3(isTest ? 'https://ethereum-sepolia-rpc.publicnode.com' : 'https://ethereum-rpc.publicnode.com');
     const bot = new TelegramBot(isTest ? TELEGRAM_BOT_TOKEN_TEST : TELEGRAM_BOT_TOKEN, { polling: true });
     // Store listeners to remove them when configs change
-
+    const listeners = {};
 
     bot.onText(/\/settings/, async (msg) => {
         const chatId = msg.chat.id;
@@ -125,7 +124,7 @@ const init_TelegramBot = (isTest = false) => {
                         await group.save();
                         bot.sendMessage(chatId, "DankPump contract address updated.");
                     }
-                    refreshMonitoring(isTest); // Refresh monitoring when a group is added or updated
+                    refreshMonitoring(); // Refresh monitoring when a group is added or updated
                 })
                     .catch(error => bot.sendMessage(chatId, "Unkown Error!"));
             });
@@ -133,7 +132,24 @@ const init_TelegramBot = (isTest = false) => {
 
     });
 
+    // Function to refresh all monitoring processes
+    async function refreshMonitoring() {
+        // Retrieve all groups and their token contract addresses
+        const groups = await TelegramGroup.find({ isTest });
 
+        // Clear all existing event subscriptions
+        for (const dank of Object.keys(listeners)) {
+            listeners[dank].unsubscribe();
+            listeners[dank].removeListener('data');
+            delete listeners[dank];
+        }
+
+        // Set up new event listeners for each group's token contract address
+        groups.forEach(group => {
+            const { dankPumpAddress, chatId, emoji, banner } = group;
+            monitorTokenBuys(dankPumpAddress, chatId, emoji, banner);
+        });
+    }
 
     function refreshCertainMonitor(dankPumpAddress, chatId, emoji, banner) {
         listeners[dankPumpAddress].unsubscribe();
@@ -141,61 +157,37 @@ const init_TelegramBot = (isTest = false) => {
         monitorTokenBuys(dankPumpAddress, chatId, emoji, banner);
     }
 
+    // Monitor transactions for a specific token contract
+    function monitorTokenBuys(dankPumpAddress, chatId, emoji, banner) {
+        if (listeners[dankPumpAddress]) {
+            // If already monitoring this contract, don't set up a new listener
+            return;
+        }
+        const web3Subscription = new Web3(isTest ? 'wss://ethereum-sepolia-rpc.publicnode.com' : 'wss://ethereum-rpc.publicnode.com');
+        const contract = new web3Subscription.eth.Contract(contractAbi, dankPumpAddress);
+        listeners[dankPumpAddress] = contract.events.Buy({ fromBlock: 'latest' });
+        listeners[dankPumpAddress].on('data', async (event) => {
+            const transactionHash = event.transactionHash;
+            const from = event.returnValues[0];
+            const dankPumpAddress = event.address;
+            const contract = new web3.eth.Contract(contractAbi, dankPumpAddress);
+            const [tokenName, tokenAddress, ethPriceResponse] = await Promise.all([
+                contract.methods.symbol().call(),
+                contract.methods.token().call(),
+                fetch('https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD', { method: 'GET' })
+            ])
+            const ethPriceData = await ethPriceResponse.json()
+            const ethPrice = ethPriceData.USD
+            const ethAmount = Number(web3.utils.fromWei(event.returnValues[1], 'ether'));
+            const tokenAmount = Number(web3.utils.fromWei(event.returnValues[2], 'ether'));
+            const virtualEthLp = event.returnValues[3];
+            const marketCap = Number(web3.utils.fromWei(event.returnValues[4], 'ether') * ethPrice);
+            const tokenContract = new web3.eth.Contract(tokenABI, tokenAddress);
+            const tokenBalance = Number(web3.utils.fromWei(await tokenContract.methods.balanceOf(from).call(), 'ether'));
+            const risePercent = (tokenAmount) / (tokenBalance - tokenAmount) * 100;
 
-    // Initial call to set up monitoring
-    refreshMonitoring(isTest);
-
-    console.log('Bot is running...');
-}
-// Function to refresh all monitoring processes
-async function refreshMonitoring(isTest) {
-    // Retrieve all groups and their token contract addresses
-    const groups = await TelegramGroup.find({ isTest });
-
-    // Clear all existing event subscriptions
-    for (const dank of Object.keys(listeners)) {
-        listeners[dank].unsubscribe();
-        listeners[dank].removeListener('data');
-        delete listeners[dank];
-    }
-
-    // Set up new event listeners for each group's token contract address
-    groups.forEach(group => {
-        const { dankPumpAddress, chatId, emoji, banner } = group;
-        monitorTokenBuys(dankPumpAddress, chatId, emoji, banner, isTest);
-    });
-}
-// Monitor transactions for a specific token contract
-function monitorTokenBuys(dankPumpAddress, chatId, emoji, banner, isTest) {
-    if (listeners[dankPumpAddress]) {
-        // If already monitoring this contract, don't set up a new listener
-        return;
-    }
-    const web3Subscription = new Web3(isTest ? 'wss://ethereum-sepolia-rpc.publicnode.com' : 'wss://ethereum-rpc.publicnode.com');
-    const contract = new web3Subscription.eth.Contract(contractAbi, dankPumpAddress);
-    listeners[dankPumpAddress] = contract.events.Buy({ fromBlock: 'latest' });
-    listeners[dankPumpAddress].on('data', async (event) => {
-        const transactionHash = event.transactionHash;
-        const from = event.returnValues[0];
-        const dankPumpAddress = event.address;
-        const contract = new web3.eth.Contract(contractAbi, dankPumpAddress);
-        const [tokenName, tokenAddress, ethPriceResponse] = await Promise.all([
-            contract.methods.symbol().call(),
-            contract.methods.token().call(),
-            fetch('https://min-api.cryptocompare.com/data/price?fsym=ETH&tsyms=USD', { method: 'GET' })
-        ])
-        const ethPriceData = await ethPriceResponse.json()
-        const ethPrice = ethPriceData.USD
-        const ethAmount = Number(web3.utils.fromWei(event.returnValues[1], 'ether'));
-        const tokenAmount = Number(web3.utils.fromWei(event.returnValues[2], 'ether'));
-        const virtualEthLp = event.returnValues[3];
-        const marketCap = Number(web3.utils.fromWei(event.returnValues[4], 'ether') * ethPrice);
-        const tokenContract = new web3.eth.Contract(tokenABI, tokenAddress);
-        const tokenBalance = Number(web3.utils.fromWei(await tokenContract.methods.balanceOf(from).call(), 'ether'));
-        const risePercent = (tokenAmount) / (tokenBalance - tokenAmount) * 100;
-
-        console.log(transactionHash, from, ethAmount, tokenAmount, virtualEthLp, marketCap)
-        const message = `${tokenName} __Buy!__
+            console.log(transactionHash, from, ethAmount, tokenAmount, virtualEthLp, marketCap)
+            const message = `${tokenName} __Buy!__
 ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(emoji)}
 💵 ${ethAmount.toLocaleString('en-US')} ETH ($${Number(ethAmount * ethPrice).toLocaleString('en-US')})
 🔀 ${tokenAmount.toLocaleString('en-US')} **${tokenName}**
@@ -203,9 +195,16 @@ ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(em
 🪙 ${tokenBalance - tokenAmount < 0.1 ? '**New Holder**' : "Position +" + risePercent.toLocaleString() + "%"}
 💸 Market Cap: $${marketCap.toLocaleString('en-US')}`;
 
-        bot.sendPhoto(chatId, banner, { caption: message, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: 'Buy', url: `https://pump.dankboy.com/buy/?chain=${isTest ? 11155111 : 1}&address=${dankPumpAddress}` }]] } });
-    })
-        .on('error', console.error);
+            bot.sendPhoto(chatId, banner, { caption: message, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: 'Buy', url: `https://pump.dankboy.com/buy/?chain=${isTest ? 11155111 : 1}&address=${dankPumpAddress}` }]] } });
+        })
+            .on('error', console.error);
+    }
+
+    // Initial call to set up monitoring
+    refreshMonitoring();
+    console.log('Bot is running...');
+    if (isTest) return refreshMonitoring;
+    else return refreshMonitoring;
 }
 
 function shortenAddress(address, chars = 4) {
@@ -217,4 +216,4 @@ function shortenAddress(address, chars = 4) {
     return `${start}…${end}`;
 }
 
-module.exports = { init_TelegramBot, refreshMonitoring };
+module.exports = {init_TelegramBot};

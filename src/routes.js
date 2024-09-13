@@ -3,7 +3,7 @@ const path = require("path");
 const multer = require('multer');
 const { Data, profileData, historyData, Advertised, StatusData } = require("../models/model");
 const { controller } = require("./controller");
-const { refreshMonitoring } = require("./telegram");
+const { triggerRefreshMonitoring, triggerRefreshMonitoringTestnet } = require(".");
 const router = express.Router();
 
 router.use((req, res, next) => {
@@ -48,20 +48,6 @@ router.get("/getAdvertised", async (req, res) => {
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
-})
-
-router.get("/private/refreshMonitoring", async (req, res) => {
-    let lastRefreshTime = await StatusData.findOne({ key: 'lastRefreshTime' });
-    if (lastRefreshTime?.value == undefined) {
-        await StatusData.create({ key: 'lastRefreshTime', value: Date.now() });
-        refreshMonitoring();
-    }
-    else {
-        if (Date.now() > lastRefreshTime.value + 100000) refreshMonitoring();
-        lastRefreshTime.value = Date.now();
-        await lastRefreshTime.save();
-    }
-    res.send('ok');
 })
 
 router.get("/getProfile/:profileAddress", async (req, res) => {
