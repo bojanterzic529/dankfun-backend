@@ -16,6 +16,7 @@ const init_TelegramBot = (isTest = false) => {
     const listeners = {};
 
     bot.onText(/\/settings/, async (msg) => {
+        console.log('debug calling here...')
         const chatId = msg.chat.id;
         // Check if the sender is the owner or an admin
         bot.getChatAdministrators(chatId).then(admins => {
