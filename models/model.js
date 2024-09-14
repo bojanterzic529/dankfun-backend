@@ -89,6 +89,13 @@ const groupSchema = new mongoose.Schema({
         required: true,
         type: String
     },
+    lpCreated: {
+        required: true,
+        type: Boolean
+    },
+    pairAddress: {
+        type: String
+    },
     tokenName: {
         required: true,
         type: String
