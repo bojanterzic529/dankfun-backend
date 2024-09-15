@@ -150,15 +150,14 @@ const init_TelegramBot = (isTest = false) => {
             listeners[dank].unsubscribe();
             delete listeners[dank];
         }
-
         // Set up new event listeners for each group's token contract address
         groups.forEach(group => {
             const { dankPumpAddress, chatId, emoji, banner } = group;
             monitorTokenBuys(dankPumpAddress, chatId, emoji, banner);
         });
         groups_lpCreated.forEach(group => {
-            const { dankPumpAddress, chatId, emoji, banner, tokenName } = group;
-            monitorTokenBuysForPair(dankPumpAddress, tokenName, chatId, emoji, banner);
+            const { pairAddress, chatId, emoji, banner, tokenName } = group;
+            monitorTokenBuysForPair(pairAddress, tokenName, chatId, emoji, banner);
         });
     }
 
@@ -226,9 +225,10 @@ ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(em
         }
         const web3Subscription = new Web3(isTest ? 'wss://ethereum-sepolia-rpc.publicnode.com' : 'wss://ethereum-rpc.publicnode.com');
         const contract = new web3Subscription.eth.Contract(uniswapV2PairAbi, pairAddress);
-        listeners[pairAddress] = contract.events.Swap({ fromBlock: 'latest' });
-        listeners[pairAddress]
+        console.log('initializing pair contract', isTest, pairAddress);
+        listeners[pairAddress] = contract.events.Swap({ fromBlock: 'latest' })
             .on('data', async (event) => {
+                console.log('swap event receievd');
                 const transactionHash = event.transactionHash;
                 const from = event.returnValues[0];
                 const pairAddress = event.address;
@@ -247,16 +247,17 @@ ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(em
                 let ethReserve = 0;
                 let tokenReserve = 0;
                 tokenPrice = 0;
-                if (token0.toLowerCase() == (isTest ? WETH_ADDRESS_TEST : WETH_ADDRESS)) {
+                console.log(token1)
+                if (token0 == (isTest ? WETH_ADDRESS_TEST : WETH_ADDRESS)) {
                     ethAmount = Number(web3.utils.fromWei(event.returnValues[1], 'ether'));
-                    tokenAmount = Number(web3.utils.fromWei(event.returnValues[4], 'ether'));
+                    tokenAmount = Number(web3.utils.fromWei(event.returnValues[4], 'gwei'));
                     tokenAddress = token1;
                     ethReserve = Number(web3.utils.fromWei(reserves[0], 'ether'));
                     tokenReserve = Number(web3.utils.fromWei(reserves[1], 'ether'));
                 }
-                else if (token1.toLowerCase() == (isTest ? WETH_ADDRESS_TEST : WETH_ADDRESS)) {
+                else if (token1 == (isTest ? WETH_ADDRESS_TEST : WETH_ADDRESS)) {
                     ethAmount = Number(web3.utils.fromWei(event.returnValues[2], 'ether'));
-                    tokenAmount = Number(web3.utils.fromWei(event.returnValues[3], 'ether'));
+                    tokenAmount = Number(web3.utils.fromWei(event.returnValues[3], 'gwei'));
                     tokenAddress = token0;
                     ethReserve = Number(web3.utils.fromWei(reserves[1], 'ether'));
                     tokenReserve = Number(web3.utils.fromWei(reserves[0], 'ether'));
@@ -268,10 +269,10 @@ ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(em
                 ])
                 const marketCap = ethReserve * 1000000000 / tokenReserve;
                 const marketCapUsd = Number(marketCap * ethPrice);
-                const tokenBalance = Number(web3.utils.fromWei(userBalance, 'ether'));
+                const tokenBalance = Number(web3.utils.fromWei(userBalance, 'gwei'));
                 const risePercent = (tokenAmount) / (tokenBalance - tokenAmount) * 100;
-
-                console.log(transactionHash, from, ethAmount, tokenAmount, virtualEthLp, marketCapUsd)
+                if (ethAmount == 0) return;
+                console.log(transactionHash, from, ethAmount, tokenAmount, marketCapUsd, tokenBalance)
                 const message = `${tokenName} __Buy!__
 ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(emoji)}
 💵 ${ethAmount.toLocaleString('en-US')} ETH ($${Number(ethAmount * ethPrice).toLocaleString('en-US')})
@@ -280,7 +281,7 @@ ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(em
 🪙 ${tokenBalance - tokenAmount < 0.1 ? '**New Holder**' : "Position +" + risePercent.toLocaleString() + "%"}
 💸 Market Cap: $${marketCapUsd.toLocaleString('en-US')}`;
 
-                bot.sendPhoto(chatId, banner, { caption: message, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: 'Buy', url: `https://pump.dankboy.com/buy/?chain=${isTest ? 11155111 : 1}&address=${dankPumpAddress}` }]] } });
+                bot.sendPhoto(chatId, banner, { caption: message, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: 'Buy', url: `https://app.uniswap.org/buy/?inputCurrency=${isTest ? WETH_ADDRESS_TEST : WETH_ADDRESS}&outputCurrency=${tokenAddress}` }]] } });
 
             })
             .on('error', console.error);
