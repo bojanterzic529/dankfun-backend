@@ -250,14 +250,14 @@ ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(em
                 console.log(token1)
                 if (token0 == (isTest ? WETH_ADDRESS_TEST : WETH_ADDRESS)) {
                     ethAmount = Number(web3.utils.fromWei(event.returnValues[1], 'ether'));
-                    tokenAmount = Number(web3.utils.fromWei(event.returnValues[4], 'gwei'));
+                    tokenAmount = Number(web3.utils.fromWei(event.returnValues[4], 'ether'));
                     tokenAddress = token1;
                     ethReserve = Number(web3.utils.fromWei(reserves[0], 'ether'));
                     tokenReserve = Number(web3.utils.fromWei(reserves[1], 'ether'));
                 }
                 else if (token1 == (isTest ? WETH_ADDRESS_TEST : WETH_ADDRESS)) {
                     ethAmount = Number(web3.utils.fromWei(event.returnValues[2], 'ether'));
-                    tokenAmount = Number(web3.utils.fromWei(event.returnValues[3], 'gwei'));
+                    tokenAmount = Number(web3.utils.fromWei(event.returnValues[3], 'ether'));
                     tokenAddress = token0;
                     ethReserve = Number(web3.utils.fromWei(reserves[1], 'ether'));
                     tokenReserve = Number(web3.utils.fromWei(reserves[0], 'ether'));
@@ -269,7 +269,7 @@ ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(em
                 ])
                 const marketCap = ethReserve * 1000000000 / tokenReserve;
                 const marketCapUsd = Number(marketCap * ethPrice);
-                const tokenBalance = Number(web3.utils.fromWei(userBalance, 'gwei'));
+                const tokenBalance = Number(web3.utils.fromWei(userBalance, 'ether'));
                 const risePercent = (tokenAmount) / (tokenBalance - tokenAmount) * 100;
                 if (ethAmount == 0) return;
                 console.log(transactionHash, from, ethAmount, tokenAmount, marketCapUsd, tokenBalance)
