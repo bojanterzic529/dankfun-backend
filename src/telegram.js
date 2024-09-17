@@ -154,6 +154,7 @@ const init_TelegramBot = (isTest = false) => {
                 return;
             }
             await TelegramGroup.deleteOne({chatId, isTest});
+            bot.sendMessage(chatId, "Your Token is successfully unsubscribed");
         }).catch(error => console.error("Failed to retrieve chat admins: ", error));
     });
     // Function to refresh all monitoring processes
