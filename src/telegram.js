@@ -1,10 +1,11 @@
 const TelegramBot = require('node-telegram-bot-api');
 const Web3 = require('web3');
-const { TelegramGroup } = require('../models/model');
+const { TelegramGroup, StatusData } = require('../models/model');
 const contractAbi = require('../abis/dank.json');
 const tokenABI = require('../abis/coin.json')
 const uniswapV2FactoryAbi = require('../abis/v2factory.json');
 const uniswapV2PairAbi = require('../abis/v2Pair.json');
+const pumpFactoryAbi = require('../ab/pumpFactory.json');
 
 const TELEGRAM_BOT_TOKEN = '6225762529:AAGLcw4RuMfFV6S8xN7hGxlZh6U8t6vC_Tw';
 const TELEGRAM_BOT_TOKEN_TEST = "6845541149:AAE71UFuRkLEhH-PLoykr21fGAXHZ6j7hbY";
@@ -13,7 +14,8 @@ const UNISWAP_V2_FACTORY_ADDRESS = "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f";
 const UNISWAP_V2_FACTORY_ADDRESS_TEST = "0x7E0987E5b3a30e3f2828572Bb659A548460a3003";
 const WETH_ADDRESS = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
 const WETH_ADDRESS_TEST = "0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9";
-
+const PUMP_FACTORY_ADDRESS = "0xf8BC6f1a49560A56efD9D286B611083B718E1dc0";
+const PUMP_FACTORY_ADDRESS_TEST = "0xf8BC6f1a49560A56efD9D286B611083B718E1dc0";
 
 const init_TelegramBot = (isTest = false) => {
 
@@ -153,36 +155,107 @@ const init_TelegramBot = (isTest = false) => {
                 bot.sendMessage(chatId, "Only admins or the group owner can set this up.");
                 return;
             }
-            await TelegramGroup.deleteOne({chatId, isTest});
+            await TelegramGroup.deleteOne({ chatId, isTest });
             bot.sendMessage(chatId, "Your Token is successfully unsubscribed");
         }).catch(error => console.error("Failed to retrieve chat admins: ", error));
     });
+
+    bot.onText(/\/register@DankFunBot/, async (msg, match) => {
+        const chatId = msg.chat.id;
+
+        if (msg.chat.type !== 'group' && msg.chat.type !== 'supergroup') {
+            bot.sendMessage(chatId, 'This command can only be used in groups.');
+            return;
+        }
+        // Check if the sender is the owner or an admin
+        bot.getChatAdministrators(chatId).then(async (admins) => {
+            const isAdmin = admins.some(admin => admin.user.id === msg.from.id);
+            if (!isAdmin) {
+                bot.sendMessage(chatId, "Only admins or the group owner can set this up.");
+                return;
+            }
+            let status = await StatusData.findOne({ key: 'mainGroupId' });
+            if (!status) {
+                await StatusData.create({ key: 'mainGroupId', value: chatId });
+                bot.sendMessage(chatId, "Successfully registered. Notifications will now be monitored.");
+            } else {
+                status.value = chatId;
+                await status.save();
+                bot.sendMessage(chatId, "DankPump Factory contract address updated.");
+            }
+        }).catch(error => console.error("Failed to retrieve chat admins: ", error));
+    });
+
     // Function to refresh all monitoring processes
     async function refreshMonitoring() {
-        // Retrieve all groups and their token contract addresses
-        const groups = await TelegramGroup.find({ isTest, lpCreated: false });
-        const groups_lpCreated = await TelegramGroup.find({ isTest, lpCreated: true });
+        try {
+            // Retrieve all groups and their token contract addresses
+            const groups = await TelegramGroup.find({ isTest, lpCreated: false });
+            const groups_lpCreated = await TelegramGroup.find({ isTest, lpCreated: true });
 
-        // Clear all existing event subscriptions
-        for (const dank of Object.keys(listeners)) {
-            listeners[dank].unsubscribe();
-            delete listeners[dank];
+            // Clear all existing event subscriptions
+            for (const dank of Object.keys(listeners)) {
+                listeners[dank].unsubscribe();
+                delete listeners[dank];
+            }
+
+            monitorNewTokenLaunch();
+
+            // Set up new event listeners for each group's token contract address
+            groups.forEach(group => {
+                const { dankPumpAddress, chatId, emoji, banner } = group;
+                monitorTokenBuys(dankPumpAddress, chatId, emoji, banner);
+            });
+            groups_lpCreated.forEach(group => {
+                const { pairAddress, chatId, emoji, banner, tokenName } = group;
+                monitorTokenBuysForPair(pairAddress, tokenName, chatId, emoji, banner);
+            });
+        } catch (error) {
+
         }
-        // Set up new event listeners for each group's token contract address
-        groups.forEach(group => {
-            const { dankPumpAddress, chatId, emoji, banner } = group;
-            monitorTokenBuys(dankPumpAddress, chatId, emoji, banner);
-        });
-        groups_lpCreated.forEach(group => {
-            const { pairAddress, chatId, emoji, banner, tokenName } = group;
-            monitorTokenBuysForPair(pairAddress, tokenName, chatId, emoji, banner);
-        });
     }
 
     function refreshCertainMonitor(dankPumpAddress, chatId, emoji, banner) {
         listeners[dankPumpAddress].unsubscribe();
         delete listeners[dankPumpAddress];
         monitorTokenBuys(dankPumpAddress, chatId, emoji, banner);
+    }
+
+    async function monitorNewTokenLaunch() {
+        const pumpFactoryAddress = isTest ? PUMP_FACTORY_ADDRESS_TEST : PUMP_FACTORY_ADDRESS;
+        if (listeners[pumpFactoryAddress]) {
+            // If already monitoring this contract, don't set up a new listener
+            return;
+        }
+        if (!isTest) return;
+        let status = await StatusData.findOne({ key: 'mainGroupId' });
+        if (!status) return;
+        const web3Subscription = new Web3(isTest ? 'wss://ethereum-sepolia-rpc.publicnode.com' : 'wss://ethereum-rpc.publicnode.com');
+        const factoryContract = new web3Subscription.eth.Contract(pumpFactoryAbi, pumpFactoryAddress);
+        listeners[pumpFactoryAddress] = factoryContract.events.NewTokenCreated({ fromBlock: 'latest' });
+        listeners[pumpFactoryAddress]
+            .on('data', async (event) => {
+                const transactionHash = event.transactionHash;
+                console.log(event)
+                const from = event.returnValues[0];
+                const tokenAddress = event.returnValues[0];
+                const dankPumpAddress = event.returnValues[1];
+                const tokenContract = new web3.eth.Contract(tokenABI, tokenAddress);
+                const contract = new web3.eth.Contract(contractAbi, dankPumpAddress);
+                const [pumpInfo] = await Promise.all([
+                    contract.methods.getFunBasicInfo().call()
+                ])
+                const [name, symbol, website, twitter, telegram, discord, info] = pumpInfo[1];
+
+                const banner = `https://api.dankboy.com/${dankPumpAddress}-banner.png`;
+                const message = `New Token Launched!
+💵 Name: ${name}
+🪙 Symbol: ${symbol}${website?.length > 0 ? '\nWebsite: ' + website : ''}${twitter?.length > 0 ? '\nTwitter: ' + twitter : ''}${telegram?.length > 0 ? '\nTelegram: ' + telegram : ''}${discord?.length > 0 ? '\nDiscord: ' + discord : ''}
+👤 [${shortenAddress(from)}](https://${isTest ? 'sepolia.' : ''}etherscan.io/address/${from}) | [token](https://${isTest ? 'sepolia.' : ''}etherscan.io/address/${tokenAddress}) | [contract](https://${isTest ? 'sepolia.' : ''}etherscan.io/address/${contract})`;
+                console.log(message, status.value.toString())
+                bot.sendPhoto(status.value.toString(), banner, { caption: message, parse_mode: 'Markdown', reply_markup: { inline_keyboard: [[{ text: 'Buy', url: `https://pump.dankboy.com/buy/?chain=${isTest ? 11155111 : 1}&address=${dankPumpAddress}` }]] } });
+            })
+            .on('error', console.error);
     }
 
     // Monitor transactions for a specific token contract
@@ -232,7 +305,6 @@ ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(em
 
             })
             .on('error', console.error);
-
     }
 
     // Monitor transactions for a specific token contract
@@ -309,7 +381,7 @@ ${new Array(Math.min(50, Number((ethAmount * ethPrice / 4).toFixed(0)))).fill(em
     async function updateListnerToPair(chatId, tokenAddress) {
         const factoryContract = new web3.eth.Contract(uniswapV2FactoryAbi, isTest ? UNISWAP_V2_FACTORY_ADDRESS_TEST : UNISWAP_V2_FACTORY_ADDRESS);
         const pairAddress = await factoryContract.methods.getPair(isTest ? WETH_ADDRESS_TEST : WETH_ADDRESS, tokenAddress).call();
-        let group = await TelegramGroup.findOne({chatId, isTest});
+        let group = await TelegramGroup.findOne({ chatId, isTest });
         group.lpCreated = true;
         group.pairAddress = pairAddress;
         await group.save();
