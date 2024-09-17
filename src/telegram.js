@@ -139,6 +139,23 @@ const init_TelegramBot = (isTest = false) => {
 
     });
 
+    bot.onText(/\/unsubscribe@DankFunBot/, async (msg, match) => {
+        const chatId = msg.chat.id;
+
+        if (msg.chat.type !== 'group' && msg.chat.type !== 'supergroup') {
+            bot.sendMessage(chatId, 'This command can only be used in groups.');
+            return;
+        }
+        // Check if the sender is the owner or an admin
+        bot.getChatAdministrators(chatId).then(async (admins) => {
+            const isAdmin = admins.some(admin => admin.user.id === msg.from.id);
+            if (!isAdmin) {
+                bot.sendMessage(chatId, "Only admins or the group owner can set this up.");
+                return;
+            }
+            await TelegramGroup.deleteOne({chatId, isTest});
+        }).catch(error => console.error("Failed to retrieve chat admins: ", error));
+    });
     // Function to refresh all monitoring processes
     async function refreshMonitoring() {
         // Retrieve all groups and their token contract addresses
